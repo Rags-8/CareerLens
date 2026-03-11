@@ -39,11 +39,20 @@ const MyProfile = () => {
     const [downloadingId, setDownloadingId] = useState(null);
     const fileInputRef = useRef(null);
     const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+    const [showCamera, setShowCamera] = useState(false);
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const streamRef = useRef(null);
 
     const [modal, setModal] = useState({ open: false, id: null });
 
     useEffect(() => {
         fetchAll();
+        return () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+            }
+        };
     }, []);
 
     const fetchAll = async () => {
@@ -97,25 +106,56 @@ const MyProfile = () => {
         }
     };
 
-    const handleCameraClick = (e) => {
+    const handleGalleryClick = (e) => {
         if (e) e.stopPropagation();
         fileInputRef.current.click();
     };
 
-    const validateProfessionalPhoto = async (base64Image) => {
-        const checkToast = toast.loading('Checking photo quality...', { position: 'bottom-center' });
+    const startCamera = async () => {
         try {
-            const res = await api.post('/ai/verify-photo', { image: base64Image });
-            toast.dismiss(checkToast);
-            if (!res.data.isProfessional) {
-                toast.error('please upload professional photo..', { duration: 5000 });
-                return false;
+            setShowCamera(true);
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
             }
-            return true;
         } catch (err) {
-            toast.dismiss(checkToast);
-            return true; 
+            toast.error('Could not access camera. Please check permissions.');
+            setShowCamera(false);
         }
+    };
+
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        setShowCamera(false);
+    };
+
+    const capturePhoto = async () => {
+        if (videoRef.current && canvasRef.current) {
+            const context = canvasRef.current.getContext('2d');
+            canvasRef.current.width = videoRef.current.videoWidth;
+            canvasRef.current.height = videoRef.current.videoHeight;
+            context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+            
+            const base64String = canvasRef.current.toDataURL('image/jpeg');
+            stopCamera();
+            
+            const updatedData = { ...formData, profile_photo: base64String };
+            setFormData(updatedData);
+
+            if (activeSection === 'overview' || showPhotoMenu) {
+                await handleSave(updatedData);
+            }
+            toast.success('Photo updated successfully from camera!');
+            setShowPhotoMenu(false);
+        }
+    };
+
+    const validateProfessionalPhoto = async (base64Image) => {
+        return true;
     };
 
     const handleFileChange = async (e) => {
@@ -574,15 +614,35 @@ const MyProfile = () => {
                             )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <button onClick={handleCameraClick} className="group flex flex-col items-center gap-4 p-8 bg-slate-50 hover:bg-violet-600 rounded-[2rem] transition-all">
+                            <button onClick={handleGalleryClick} className="group flex flex-col items-center gap-4 p-8 bg-slate-50 hover:bg-violet-600 rounded-[2rem] transition-all">
                                 <div className="p-4 bg-white rounded-2xl shadow-sm"><Image className="w-6 h-6 text-violet-600" /></div>
                                 <span className="font-black text-slate-900 group-hover:text-white">Gallery</span>
                             </button>
-                            <button onClick={handleCameraClick} className="group flex flex-col items-center gap-4 p-8 bg-slate-50 hover:bg-emerald-600 rounded-[2rem] transition-all">
+                            <button onClick={startCamera} className="group flex flex-col items-center gap-4 p-8 bg-slate-50 hover:bg-emerald-600 rounded-[2rem] transition-all">
                                 <div className="p-4 bg-white rounded-2xl shadow-sm"><Camera className="w-6 h-6 text-emerald-600" /></div>
                                 <span className="font-black text-slate-900 group-hover:text-white">Camera</span>
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {showCamera && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-in fade-in transition-all">
+                    <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl" onClick={stopCamera} />
+                    <div className="relative w-full max-w-lg bg-white rounded-[3rem] p-8 shadow-2xl animate-in zoom-in duration-300 flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                        <div className="w-full flex justify-between items-center mb-6 px-2">
+                            <h3 className="text-xl font-black text-slate-900">Take a Photo</h3>
+                            <button onClick={stopCamera} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="relative w-full aspect-square bg-black rounded-[2rem] overflow-hidden mb-6 flex items-center justify-center border-4 border-slate-100">
+                            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                            <canvas ref={canvasRef} className="hidden" />
+                        </div>
+                        <button onClick={capturePhoto} className="w-20 h-20 bg-emerald-500 hover:bg-emerald-600 hover:scale-105 rounded-full border-4 border-emerald-200 flex items-center justify-center shadow-lg transition-all active:scale-95">
+                            <Camera className="w-8 h-8 text-white" />
+                        </button>
                     </div>
                 </div>
             )}

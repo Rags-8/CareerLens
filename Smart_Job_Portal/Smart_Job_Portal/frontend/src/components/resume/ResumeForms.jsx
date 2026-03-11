@@ -11,19 +11,7 @@ const ResumeForms = ({ currentStep, setCurrentStep, resumeData, updateData }) =>
     const fileInputRef = useRef(null);
 
     const validateProfessionalPhoto = async (base64Image) => {
-        const checkToast = toast.loading('Checking photo quality...', { position: 'bottom-center' });
-        try {
-            const res = await api.post('/ai/verify-photo', { image: base64Image });
-            toast.dismiss(checkToast);
-            if (!res.data.isProfessional) {
-                toast.error('please upload professional photo..', { duration: 5000 });
-                return false;
-            }
-            return true;
-        } catch (err) {
-            toast.dismiss(checkToast);
-            return true; 
-        }
+        return true;
     };
 
     const handleFileChange = (e) => {
